@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14171c">
+<title>Gambit — chess with friends</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2314171c'/%3E%3Ctext x='50' y='72' font-size='64' text-anchor='middle' fill='%23e8b64c'%3E%E2%99%9E%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="/" id="brand"><span class="brand-mark">♞</span><span>Gambit</span></a>
+  <div class="top-right">
+    <span class="net" id="net" title="Connection"><i></i><span id="net-text">connecting…</span></span>
+    <button class="btn ghost icon" id="btn-settings" title="Settings" aria-label="Settings">⚙</button>
+  </div>
+</header>
+
+<main>
+  <!-- ================================================= HOME -->
+  <section id="home" class="view">
+    <div class="home-grid">
+      <div class="col">
+        <div class="card hero">
+          <div class="profile">
+            <div class="avatar" id="avatar">?</div>
+            <div class="profile-main">
+              <label class="muted small" for="name-input">Your name</label>
+              <div class="row">
+                <input id="name-input" maxlength="20" autocomplete="off" spellcheck="false" placeholder="Pick a name">
+                <button class="btn small" id="btn-save-name">Save</button>
+              </div>
+            </div>
+            <div class="rating-box"><div class="rating" id="my-rating">1200</div><div class="muted small">rating</div></div>
+          </div>
+        </div>
+
+        <div class="card" id="quick-card">
+          <div class="card-head"><h2>Quick play</h2><span class="muted small" id="queue-count"></span></div>
+          <div id="quick-pick">
+            <div class="quick-grid" id="quick-grid">
+              <button class="quick" data-tc="1,0"><b>1+0</b><span>Bullet</span></button>
+              <button class="quick" data-tc="3,0"><b>3+0</b><span>Blitz</span></button>
+              <button class="quick" data-tc="3,2"><b>3+2</b><span>Blitz</span></button>
+              <button class="quick" data-tc="5,3"><b>5+3</b><span>Blitz</span></button>
+              <button class="quick" data-tc="10,0"><b>10+0</b><span>Rapid</span></button>
+              <button class="quick" data-tc="15,10"><b>15+10</b><span>Rapid</span></button>
+            </div>
+            <label class="check"><input type="checkbox" id="quick-rated" checked> Rated <span class="muted small">— paired with someone close to your rating</span></label>
+          </div>
+          <div id="quick-wait" class="hidden">
+            <div class="searching"><span class="spinner"></span>
+              <div><div class="search-title">Searching for an opponent…</div>
+              <div class="muted small"><span id="search-tc"></span> · <span id="search-time">0:00</span> · rating range ±<span id="search-range">100</span></div></div>
+            </div>
+            <button class="btn danger" id="btn-cancel-queue">Cancel search</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Play a friend</h2>
+          <div class="form-grid">
+            <label>Time control
+              <select id="tc">
+                <option value="0,0">Unlimited</option>
+                <option value="1,0">1 + 0 · Bullet</option>
+                <option value="3,0">3 + 0 · Blitz</option>
+                <option value="3,2">3 + 2 · Blitz</option>
+                <option value="5,0">5 + 0 · Blitz</option>
+                <option value="5,3" selected>5 + 3 · Blitz</option>
+                <option value="10,0">10 + 0 · Rapid</option>
+                <option value="10,5">10 + 5 · Rapid</option>
+                <option value="15,10">15 + 10 · Rapid</option>
+                <option value="30,0">30 + 0 · Classical</option>
+              </select>
+            </label>
+            <label>I play as
+              <div class="seg" id="seg-color">
+                <button data-v="w" title="White">♔ White</button>
+                <button data-v="random" class="on" title="Random">⚄ Random</button>
+                <button data-v="b" title="Black">♚ Black</button>
+              </div>
+            </label>
+          </div>
+          <div class="checks">
+            <label class="check"><input type="checkbox" id="opt-rated" checked> Rated <span class="muted small">(affects ratings)</span></label>
+            <label class="check"><input type="checkbox" id="opt-public"> List in open games <span class="muted small">(otherwise invite-only link)</span></label>
+          </div>
+          <button class="btn primary big" id="btn-create">Create game &amp; get invite link</button>
+        </div>
+
+        <div class="card">
+          <h2>Practice</h2>
+          <div class="form-grid">
+            <label>Computer level
+              <select id="ai-level">
+                <option value="1">1 · Beginner</option>
+                <option value="2">2 · Casual</option>
+                <option value="3" selected>3 · Club player</option>
+                <option value="4">4 · Strong</option>
+                <option value="5">5 · Maximum</option>
+              </select>
+            </label>
+            <label>I play as
+              <div class="seg" id="seg-ai-color">
+                <button data-v="w">♔ White</button>
+                <button data-v="random" class="on">⚄ Random</button>
+                <button data-v="b">♚ Black</button>
+              </div>
+            </label>
+          </div>
+          <div class="row wrap gap">
+            <button class="btn primary" id="btn-ai">Play the computer</button>
+            <button class="btn" id="btn-local">Analysis / pass &amp; play board</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Join with a code</h2>
+          <div class="row gap">
+            <input id="join-code" placeholder="Paste invite link or code" autocomplete="off" spellcheck="false">
+            <button class="btn" id="btn-join">Join</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card">
+          <div class="card-head"><h2>Open games</h2><span class="muted small" id="online-count"></span></div>
+          <div id="open-list" class="list"><div class="empty">No open games. Create one and share the link!</div></div>
+        </div>
+        <div class="card">
+          <h2>Live games</h2>
+          <div id="live-list" class="list"><div class="empty">Nothing in progress.</div></div>
+        </div>
+        <div class="card">
+          <h2>Leaderboard</h2>
+          <div id="top-list" class="list"><div class="empty">Play a rated game to get on the board.</div></div>
+        </div>
+        <div class="card">
+          <h2>Recent games</h2>
+          <div id="recent-list" class="list"><div class="empty">No finished games yet.</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================= GAME -->
+  <section id="game" class="view hidden">
+    <div class="game-layout">
+      <div class="board-col" id="board-col">
+        <div class="playerbar" id="bar-top">
+          <div class="pb-left">
+            <span class="dot" id="dot-top"></span>
+            <span class="pb-name" id="name-top"></span>
+            <span class="pb-rating" id="rating-top"></span>
+            <span class="captured" id="cap-top"></span>
+          </div>
+          <div class="clock" id="clock-top">--:--</div>
+        </div>
+
+        <div class="board-wrap">
+          <div class="evalbar hidden" id="evalbar"><div class="eval-black" id="eval-fill"></div><span id="eval-text">0.0</span></div>
+          <div id="board" class="board" tabindex="0" aria-label="Chess board"></div>
+        </div>
+
+        <div class="playerbar" id="bar-bottom">
+          <div class="pb-left">
+            <span class="dot" id="dot-bottom"></span>
+            <span class="pb-name" id="name-bottom"></span>
+            <span class="pb-rating" id="rating-bottom"></span>
+            <span class="captured" id="cap-bottom"></span>
+          </div>
+          <div class="clock" id="clock-bottom">--:--</div>
+        </div>
+      </div>
+
+      <aside class="side">
+        <div class="panel status-panel">
+          <div class="status-line" id="status-line">…</div>
+          <div class="sub muted small" id="status-sub"></div>
+          <div class="banner hidden" id="invite">
+            <div class="small muted">Send this link to your friend</div>
+            <div class="row gap">
+              <input id="invite-link" readonly>
+              <button class="btn small primary" id="btn-copy-link">Copy</button>
+            </div>
+          </div>
+          <div class="banner hidden" id="offer-banner"></div>
+        </div>
+
+        <div class="panel review-panel hidden" id="review-panel"></div>
+
+        <div class="panel moves-panel">
+          <div class="moves-head">
+            <span class="opening" id="opening"></span>
+            <div class="nav">
+              <button class="btn ghost icon" id="nav-first" title="First (Home)">⏮</button>
+              <button class="btn ghost icon" id="nav-prev" title="Previous (←)">◀</button>
+              <button class="btn ghost icon" id="nav-next" title="Next (→)">▶</button>
+              <button class="btn ghost icon" id="nav-last" title="Latest (End)">⏭</button>
+            </div>
+          </div>
+          <div class="moves" id="moves"></div>
+          <div class="analysis hidden" id="analysis-line"></div>
+        </div>
+
+        <div class="panel actions" id="actions"></div>
+
+        <div class="panel chat-panel" id="chat-panel">
+          <div class="chat-log" id="chat-log"></div>
+          <form class="chat-form" id="chat-form">
+            <input id="chat-input" maxlength="300" placeholder="Say something nice…" autocomplete="off">
+            <button class="btn small" type="submit">Send</button>
+          </form>
+        </div>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<!-- promotion picker -->
+<div class="modal hidden" id="promo-modal">
+  <div class="modal-card promo">
+    <div class="small muted">Promote to</div>
+    <div class="promo-row" id="promo-row"></div>
+  </div>
+</div>
+
+<!-- game over -->
+<div class="modal hidden" id="over-modal">
+  <div class="modal-card over">
+    <button class="btn ghost icon close" id="over-close" aria-label="Close">✕</button>
+    <div class="over-icon" id="over-icon">♚</div>
+    <h2 id="over-title"></h2>
+    <div class="muted" id="over-sub"></div>
+    <div class="over-delta" id="over-delta"></div>
+    <div class="row wrap gap center" id="over-actions"></div>
+  </div>
+</div>
+
+<!-- settings -->
+<div class="modal hidden" id="settings-modal">
+  <div class="modal-card settings">
+    <button class="btn ghost icon close" id="settings-close" aria-label="Close">✕</button>
+    <h2>Settings</h2>
+    <div class="set-row"><span>Board theme</span><div class="swatches" id="themes"></div></div>
+    <div class="set-row"><span>Piece style</span>
+      <div class="seg" id="seg-pieces"><button data-v="solid">Solid</button><button data-v="classic">Classic</button></div>
+    </div>
+    <div class="set-row"><span>Game review depth</span>
+      <div class="seg" id="seg-review"><button data-v="350">Quick</button><button data-v="800">Standard</button><button data-v="2200">Deep</button></div>
+    </div>
+    <label class="set-row"><span>Sound effects</span><input type="checkbox" id="set-sound"></label>
+    <label class="set-row"><span>Piece animation</span><input type="checkbox" id="set-anim"></label>
+    <label class="set-row"><span>Highlight legal moves</span><input type="checkbox" id="set-hints"></label>
+    <label class="set-row"><span>Always promote to queen</span><input type="checkbox" id="set-autoq"></label>
+    <label class="set-row"><span>Show board coordinates</span><input type="checkbox" id="set-coords"></label>
+    <div class="muted small tips">
+      <b>Tips</b> — Click or drag to move · right-click squares (drag between squares) to draw arrows and highlights ·
+      ← → to browse moves · <kbd>F</kbd> flips the board · you can <b>premove</b> while it's your opponent's turn.
+    </div>
+  </div>
+</div>
+
+<div id="toasts" class="toasts"></div>
+
+<script src="/chess.js"></script>
+<script src="/openings.js"></script>
+<script src="/review.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

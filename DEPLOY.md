@@ -1,16 +1,13 @@
-# Putting Gambit online (GitHub + AWS)
+# Putting Gambit online (GitHub + AWS free plan)
 
-Goal: your friend opens `https://your-domain` (or an IP) and plays. Takes about 20 minutes.
+Goal: your friend opens `https://your-domain` (or an IP address) and plays. Takes about 20 minutes.
 
 ## 1. GitHub
 
 1. On github.com click **New repository**, name it `gambit-chess`, leave it **empty** (no README), choose Private or Public.
-2. In this project folder:
+2. In this project folder (the first commit already exists):
 
 ```bash
-git init -b main
-git add .
-git commit -m "Gambit chess"
 git remote add origin https://github.com/<your-username>/gambit-chess.git
 git push -u origin main
 ```
@@ -20,15 +17,28 @@ Git for Windows opens a browser window to sign in the first time. Nothing secret
 
 If the repo is **private**, your friend only needs the game URL, not repo access.
 
-## 2. AWS — Lightsail (simplest, ~$5/month, has a free trial)
+## 2. AWS — free plan with one EC2 server
 
-Gambit keeps live games in memory, so run **one** server (do not put it behind an autoscaling group).
-Lightsail is a plain virtual server, which is exactly right.
+How AWS's free tier works for **new** accounts (as of this writing; check <https://aws.amazon.com/free/>):
+you get about $100 of credits at sign-up (up to $100 more for trying services), valid for **6 months**.
+You pick the **Free plan** while signing up, which can't bill you; when the credits or 6 months run out the
+account closes unless you upgrade. Accounts created before July 2025 have the older 12-month t2/t3.micro allowance.
 
-1. AWS Console → **Lightsail** → **Create instance** → Linux/Unix → **OS only → Ubuntu 22.04** → the $5 plan.
-2. After it starts: **Networking** tab → add firewall rules for **HTTP (80)** and **HTTPS (443)**.
-   Also click **Create static IP** and attach it, so the address never changes.
-3. Click the orange **Connect using SSH** button, then run:
+Gambit keeps live games in memory, so run **one** server (no autoscaling, no load balancer).
+A single small EC2 instance is exactly right.
+
+1. Sign up at aws.amazon.com and choose the **Free plan**. (You need a card for verification; nothing is charged on the Free plan.)
+2. Console → **EC2** → **Launch instance**:
+   - **Name:** `gambit`
+   - **Image:** Ubuntu Server 24.04 LTS
+   - **Instance type:** `t3.micro` (labelled *Free tier eligible*)
+   - **Key pair:** *Proceed without a key pair* is fine; you'll connect from the browser
+   - **Network settings → Edit:** create a security group that allows **SSH (22)**, **HTTP (80)** and **HTTPS (443)** from anywhere.
+     No domain? Also add a **Custom TCP 3000** rule.
+   - **Storage:** leave the default 8 GB
+3. After it's running: **Elastic IPs** → *Allocate* → *Associate* with the instance, so the address survives stop/start.
+   (Public IPv4 addresses cost a few cents per hour; on the Free plan that comes out of your credits.)
+4. Select the instance → **Connect** → **EC2 Instance Connect** → *Connect*. A terminal opens in your browser. Run:
 
 ```bash
 # Node 20
@@ -40,7 +50,8 @@ git clone https://github.com/<your-username>/gambit-chess.git
 cd gambit-chess && npm ci --omit=dev
 ```
 
-4. Run it as a service so it survives crashes and reboots. Create `/etc/systemd/system/gambit.service`:
+5. Run it as a service so it survives crashes and reboots. Create `/etc/systemd/system/gambit.service`
+   (`sudo nano /etc/systemd/system/gambit.service`):
 
 ```ini
 [Unit]
@@ -63,8 +74,8 @@ WantedBy=multi-user.target
 sudo systemctl daemon-reload && sudo systemctl enable --now gambit
 ```
 
-5. **HTTPS** (needed for the clipboard "Copy link" button and for friends' phones). Point a domain's
-   A record at the static IP, then:
+6. **HTTPS** (recommended; needed for the one-click "Copy link" button and nicer for phones). Point a domain's
+   A record at the Elastic IP, then:
 
 ```bash
 sudo apt-get install -y caddy
@@ -73,8 +84,8 @@ sudo systemctl restart caddy
 ```
 
 Caddy gets and renews the certificate automatically and proxies WebSockets with no extra settings.
-No domain? Skip step 5 and use `http://<static-ip>:3000` (open port 3000 in the firewall instead of 80/443).
-Everything works over plain HTTP except the one-click copy button, which falls back automatically.
+**No domain?** Skip step 6 and share `http://<elastic-ip>:3000`. Everything works over plain HTTP; the Copy button
+falls back automatically.
 
 ### Updating later
 
@@ -84,15 +95,15 @@ cd gambit-chess && git pull && npm ci --omit=dev && sudo systemctl restart gambi
 
 (Restarting ends games in progress, so do it when nobody is playing. Ratings and history survive; they live in `DATA_DIR`.)
 
-## Alternative: Docker on Lightsail Containers
+## Staying inside the free plan
 
-A `Dockerfile` is included. Lightsail → **Containers** → create a service (Nano), push the image with the
-Lightsail plugin, expose port 3000. You get a free `https://….amazonlightsail.com` address. Mount no
-volume and ratings reset on every deploy, so the VM route above is better if you want ratings to stick.
+- Create a **budget alert** (Billing → Budgets) so you hear about any spend.
+- Leave the plan on **Free** (don't upgrade to Paid) and AWS won't charge you; it closes the account at 6 months instead.
+- Keep exactly one instance, one Elastic IP, and the default 8 GB disk.
+- When the 6 months are up, either upgrade (a t3.micro is roughly $8–10/month) or move the same repo to any other host.
+  The Dockerfile in this repo works on Fly.io, Render, Railway, etc.
 
-## Costs & safety notes
+## Safety notes
 
-- Lightsail Nano/Micro is a flat monthly price, so there are no surprise bills. Set an AWS budget alert anyway.
-- Anyone with the link can play. There is no login, so don't put it somewhere you don't want strangers to find;
-  keep "List in open games" off for private games.
+- Anyone with the link can play. There is no login, so don't post it publicly; keep "List in open games" off for private games.
 - Never commit AWS keys or tokens. This project doesn't need any.

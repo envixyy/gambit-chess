@@ -441,6 +441,7 @@ function handleAdmin(c, m) {
       const r = Math.round(+m.rating);
       if (!p || !(r >= 100 && r <= 3500)) return send(c, { t: 'error', msg: 'Rating must be 100–3500' });
       p.rating = r; saveSoon(); lobbySoon();
+      for (const s of clients) if (s.pid === String(m.pid)) send(s, me(s));      // update their profile right away
       return handleAdmin(c, { a: 'players' });
     }
     case 'resetboard':

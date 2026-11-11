@@ -1808,15 +1808,40 @@
   var adminTab = 'powers', adminConfirm = 0;
   function inMyOnlineGame() { return !!(G && G.mode === 'online' && G.status === 'playing' && (G.seat === 'w' || G.seat === 'b')); }
 
+  /* Which powers make sense on the board in front of you. Only live online games need announcing
+   * (and go unrated); computer games, the sandbox and replays are private, so nothing is announced there. */
+  function powerState() {
+    var online = inMyOnlineGame(), mode = G && G.mode;
+    return {
+      mode: mode, online: online,
+      hint: online || (mode === 'computer' && myTurnNow()) || (mode === 'local'),
+      undo: !!G && G.moves.length > 0 && (online || mode === 'computer' || mode === 'local'),
+      time: online && !!(G.tc && G.tc.base)
+    };
+  }
   function adminHint() {
-    if (!inMyOnlineGame()) { toast('Hints work in your own live games', true); return; }
-    Net.send({ t: 'admin', a: 'hint' });                 // the server announces it to the table
+    var ps = powerState();
+    if (!ps.hint) { toast('Hints work on a board where it is your move', true); return; }
+    if (ps.online) Net.send({ t: 'admin', a: 'hint' });            // live games: the server tells the table
     var g = G, fen = G.chess.fen();
     toast('Thinking…');
     Engine.run({ type: 'analyze', fen: fen, depth: 10, ms: 1600 }).then(function (res) {
       if (G !== g || !res.move) return;
       g.hint = res.move; view.setHint(res.move);
     });
+  }
+  function adminUndo() {
+    var ps = powerState();
+    if (!ps.undo) return;
+    if (ps.online) Net.send({ t: 'admin', a: 'undo' });
+    else if (G.mode === 'computer') undoComputer();
+    else { truncateTo(Math.min(curPly(), G.moves.length) - (isLive() ? 1 : 0)); renderAll(null); if (G.analysis) requestAnalysis(); }
+  }
+  function openSandbox() {
+    startLocal();
+    G.analysis = true; G.analysisInfo = null;
+    renderAll(null); requestAnalysis();
+    toast('🧪 Sandbox: move any piece, the engine is on');
   }
 
   function updateAdminUI() {
@@ -1861,19 +1886,41 @@
     if (!S.admin) { box.appendChild(h('div', 'muted', 'Admin is locked.')); return; }
 
     if (adminTab === 'powers') {
-      var live = inMyOnlineGame();
-      box.appendChild(h('div', 'admin-note', 'Powers are never secret: using one marks the game unrated and tells everyone at the table. Start or join a live game to use them.'));
-      var pw = h('div', 'apower');
-      function power(title, sub, fn, disabled) {
-        var b = h('button', 'btn'); b.disabled = disabled;
-        b.appendChild(document.createTextNode(title)); b.appendChild(h('small', null, sub));
-        b.onclick = function () { $('#admin-modal').classList.add('hidden'); fn(); };
-        pw.appendChild(b);
+      var ps = powerState();
+      function powerGrid() {
+        var grid = h('div', 'apower');
+        grid.add = function (title, sub, fn, disabled) {
+          var b = h('button', 'btn'); b.disabled = !!disabled;
+          b.appendChild(document.createTextNode(title)); b.appendChild(h('small', null, sub));
+          b.onclick = function () { $('#admin-modal').classList.add('hidden'); fn(); };
+          grid.appendChild(b);
+        };
+        return grid;
       }
-      power('💡 Engine hint', 'Best move arrow for your turn', adminHint, !live);
-      power('↶ Undo my move', 'Takes back your last move, no permission needed', function () { Net.send({ t: 'admin', a: 'undo' }); }, !live || !G.moves.length);
-      power('⏱ +1:00 clock', 'Adds a minute to your clock', function () { Net.send({ t: 'admin', a: 'addtime' }); }, !live || !(G.tc && G.tc.base));
-      box.appendChild(pw);
+      box.appendChild(h('h3', null, 'Use anywhere'));
+      var any = powerGrid();
+      any.add('🧪 Sandbox board', 'Free board with the engine on. Nothing is rated or announced', openSandbox, false);
+      any.add('📊 Review a game', 'Open the sandbox, then use Import to load a PGN', function () { openSandbox(); }, false);
+      box.appendChild(any);
+
+      box.appendChild(h('h3', null, 'Your rating'));
+      var rr = h('div', 'arow');
+      rr.appendChild(h('span', 'grow', 'Set your own rating (shows on your profile and the ladder)'));
+      var ri = h('input'); ri.type = 'number'; ri.min = 100; ri.max = 3500; ri.value = S.rating;
+      var rs = h('button', 'btn small', 'Set');
+      rs.onclick = function () { Net.send({ t: 'admin', a: 'setrating', pid: S.pid, rating: +ri.value }); toast('Rating set'); };
+      rr.appendChild(ri); rr.appendChild(rs); box.appendChild(rr);
+
+      box.appendChild(h('h3', null, ps.mode ? 'On this board' : 'On a board'));
+      box.appendChild(h('div', 'admin-note',
+        ps.online ? 'This is a live game: using a power tells the table and makes the game unrated.'
+        : ps.mode ? 'Not a live game, so these are private: nothing is announced and nothing is rated.'
+        : 'Open a computer game, the sandbox or a live game, then come back here (or use the 👑 buttons under the board).'));
+      var here = powerGrid();
+      here.add('💡 Engine hint', 'Best move arrow for your turn', adminHint, !ps.hint);
+      here.add('↶ Undo', ps.online ? 'Takes back your last move, no permission needed' : 'Takes back your last move', adminUndo, !ps.undo);
+      here.add('⏱ +1:00 clock', 'Adds a minute to your clock (live timed games)', function () { Net.send({ t: 'admin', a: 'addtime' }); }, !ps.time);
+      box.appendChild(here);
       box.appendChild(h('h3', null, 'Danger zone'));
       var rb = h('button', 'btn danger', Date.now() - adminConfirm < 3500 ? 'Really wipe everything?' : '🗑 Reset leaderboard & history');
       rb.onclick = function () {

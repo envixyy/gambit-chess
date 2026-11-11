@@ -6,13 +6,23 @@
 <meta name="theme-color" content="#14171c">
 <title>Gambit — chess with friends</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2314171c'/%3E%3Ctext x='50' y='72' font-size='64' text-anchor='middle' fill='%23e8b64c'%3E%E2%99%9E%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap">
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/v2.css">
 </head>
-<body>
+<body data-ui="neon">
+
+<canvas id="fx-bg" aria-hidden="true"></canvas>
+<canvas id="fx-top" aria-hidden="true"></canvas>
+
+<div class="announce hidden" id="announce"><span class="ann-ico">📣</span><span id="announce-text"></span><button class="btn ghost icon" id="announce-close" aria-label="Dismiss">✕</button></div>
 
 <header class="topbar">
-  <a class="brand" href="/" id="brand"><span class="brand-mark">♞</span><span>Gambit</span></a>
+  <a class="brand" href="/" id="brand"><span class="brand-mark">♞</span><span class="brand-word">Gambit</span></a>
   <div class="top-right">
+    <button class="btn admin-btn hidden" id="btn-admin" title="Admin tools">👑 Admin</button>
     <span class="net" id="net" title="Connection"><i></i><span id="net-text">connecting…</span></span>
     <button class="btn ghost icon" id="btn-settings" title="Settings" aria-label="Settings">⚙</button>
   </div>
@@ -21,6 +31,18 @@
 <main>
   <!-- ================================================= HOME -->
   <section id="home" class="view">
+    <div class="hero-banner">
+      <div class="hero-text">
+        <div class="eyebrow"><span class="pulse-dot"></span> real-time chess · <span id="hero-online">live</span></div>
+        <h1>Play. Outsmart. <span class="grad">Win.</span></h1>
+        <p>Duel your friends, climb the ladder, and let the engine crown your brilliant moves after every game.</p>
+        <div class="hero-chips"><span>⚡ Live clocks</span><span>🏆 Elo ladder</span><span>💎 Brilliancy review</span><span>🤖 5 AI levels</span></div>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="orb"></div>
+        <div class="hero-piece p1">♞</div><div class="hero-piece p2">♛</div><div class="hero-piece p3">♜</div><div class="hero-piece p4">♝</div>
+      </div>
+    </div>
     <div class="home-grid">
       <div class="col">
         <div class="card hero">
@@ -33,7 +55,7 @@
                 <button class="btn small" id="btn-save-name">Save</button>
               </div>
             </div>
-            <div class="rating-box"><div class="rating" id="my-rating">1200</div><div class="muted small">rating</div></div>
+            <div class="rating-box"><div class="rating" id="my-rating">1200</div><div class="tier-chip" id="my-tier">Silver</div></div>
           </div>
         </div>
 
@@ -153,6 +175,7 @@
       <div class="board-col" id="board-col">
         <div class="playerbar" id="bar-top">
           <div class="pb-left">
+            <span class="pb-av" id="av-top">?</span>
             <span class="dot" id="dot-top"></span>
             <span class="pb-name" id="name-top"></span>
             <span class="pb-rating" id="rating-top"></span>
@@ -168,6 +191,7 @@
 
         <div class="playerbar" id="bar-bottom">
           <div class="pb-left">
+            <span class="pb-av" id="av-bottom">?</span>
             <span class="dot" id="dot-bottom"></span>
             <span class="pb-name" id="name-bottom"></span>
             <span class="pb-rating" id="rating-bottom"></span>
@@ -246,6 +270,10 @@
   <div class="modal-card settings">
     <button class="btn ghost icon close" id="settings-close" aria-label="Close">✕</button>
     <h2>Settings</h2>
+    <div class="set-row"><span>Site look</span>
+      <div class="seg" id="seg-ui"><button data-v="neon">⚡ Neon</button><button data-v="sakura">🌸 Sakura</button><button data-v="gold">✨ Gold</button></div>
+    </div>
+    <label class="set-row"><span>Background effects</span><input type="checkbox" id="set-fx"></label>
     <div class="set-row"><span>Board theme</span><div class="swatches" id="themes"></div></div>
     <div class="set-row"><span>Piece style</span>
       <div class="seg" id="seg-pieces"><button data-v="solid">Solid</button><button data-v="classic">Classic</button></div>
@@ -262,11 +290,36 @@
       <b>Tips</b> — Click or drag to move · right-click squares (drag between squares) to draw arrows and highlights ·
       ← → to browse moves · <kbd>F</kbd> flips the board · you can <b>premove</b> while it's your opponent's turn.
     </div>
+    <details class="admin-login" id="admin-login">
+      <summary>👑 Admin</summary>
+      <div id="admin-locked">
+        <div class="muted small">Enter the secret admin key to unlock admin powers on this device.</div>
+        <div class="row gap"><input type="password" id="admin-key" placeholder="Admin key" autocomplete="off" spellcheck="false"><button class="btn small primary" id="btn-admin-unlock">Unlock</button></div>
+        <div class="small admin-msg" id="admin-msg"></div>
+      </div>
+      <div id="admin-unlocked" class="hidden">
+        <div class="small">👑 Admin is <b>unlocked</b> on this device.</div>
+        <button class="btn small" id="btn-admin-forget">Lock &amp; forget key</button>
+      </div>
+    </details>
+  </div>
+</div>
+
+<!-- admin tools -->
+<div class="modal hidden" id="admin-modal">
+  <div class="modal-card admin-card">
+    <button class="btn ghost icon close" id="admin-close" aria-label="Close">✕</button>
+    <h2>👑 Admin tools</h2>
+    <div class="seg admin-tabs" id="admin-tabs">
+      <button data-v="powers" class="on">⚡ Powers</button><button data-v="games">Games</button><button data-v="players">Players</button><button data-v="announce">📣 Announce</button>
+    </div>
+    <div id="admin-body" class="admin-body"></div>
   </div>
 </div>
 
 <div id="toasts" class="toasts"></div>
 
+<script src="/fx.js"></script>
 <script src="/chess.js"></script>
 <script src="/openings.js"></script>
 <script src="/review.js"></script>

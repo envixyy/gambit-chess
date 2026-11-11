@@ -53,6 +53,17 @@ material count, flip board, 7 board themes, synthesized sound effects (no audio 
 **Practice** — play the built-in computer (5 levels, with hints and undo), or open the
 **analysis board**: engine evaluation bar, best-move arrow, import/export PGN and FEN, branch off any position.
 
+## Admin (optional)
+
+Set an `ADMIN_KEY` environment variable on the server (a long random secret) to turn on admin tools. Whoever enters that key in **Settings → 👑 Admin** gets the admin button, a crown next to their name, and the powers below. The name `kawaiigirl34` is reserved: nobody without the key can use it (change or add names with `ADMIN_NAMES=name1,name2`). With no `ADMIN_KEY`, admin is disabled completely.
+
+- **Powers in your own live game:** engine hint, undo a move without asking, +1 minute. They are never secret: the game becomes unrated and the table sees a chat line saying an admin power was used.
+- **Server tools:** list and watch every game, end any game, set any player's rating, reset the leaderboard, and send an announcement banner to everyone online.
+
+## Looks
+
+Settings → **Site look**: ⚡ Neon, 🌸 Sakura, ✨ Gold, with animated background effects (can be turned off), confetti on wins, capture sparks, rank tiers (Rookie to Master) and generated avatars.
+
 ## Keyboard
 
 `←` `→` browse moves · `Home` / `End` first / latest · `F` flip · `Esc` cancel selection / premove

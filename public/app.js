@@ -31,15 +31,25 @@
   }
 
   /* ================================================================ identity & settings */
-  var S = { pid: lsGet('gambit.pid', null), sid: ssGet('gambit.sid'), name: lsGet('gambit.name', null), rating: 1200, queued: null };
+  var S = { pid: lsGet('gambit.pid', null), sid: ssGet('gambit.sid'), name: lsGet('gambit.name', null), rating: 1200, queued: null, admin: false, adminData: {} };
   if (!S.pid || typeof S.pid !== 'string' || S.pid.length < 8) { S.pid = 'p' + rid(23); lsSet('gambit.pid', S.pid); }
   if (!S.sid) { S.sid = 's' + rid(15); ssSet('gambit.sid', S.sid); }
   if (!S.name) { S.name = 'Guest' + Math.floor(1000 + Math.random() * 9000); lsSet('gambit.name', S.name); }
 
-  var settings = Object.assign({ theme: 'green', pieces: 'solid', sound: true, anim: true, hints: true, autoq: false, coords: true, reviewMs: 800 }, lsGet('gambit.settings', {}));
+  var settings = Object.assign({ ui: 'neon', fx: true, theme: 'violet', pieces: 'solid', sound: true, anim: true, hints: true, autoq: false, coords: true, reviewMs: 800 }, lsGet('gambit.settings', {}));
   function saveSettings() { lsSet('gambit.settings', settings); }
 
-  var THEMES = { green: ['#eeeed2', '#769656'], brown: ['#f0d9b5', '#b58863'], blue: ['#dee3e6', '#8ca2ad'], slate: ['#c9ccd4', '#66758a'], midnight: ['#8f9bb3', '#45506b'], rose: ['#f1e0dc', '#b87f87'], walnut: ['#d9b98a', '#8a5a35'] };
+  var THEMES = { violet: ['#dcd6ff', '#7b63d6'], sakurab: ['#ffe9f3', '#f08cb8'], ice: ['#e6f4ff', '#5fa3d6'], green: ['#eeeed2', '#769656'], brown: ['#f0d9b5', '#b58863'], blue: ['#dee3e6', '#8ca2ad'], slate: ['#c9ccd4', '#66758a'], midnight: ['#8f9bb3', '#45506b'], rose: ['#f1e0dc', '#b87f87'], walnut: ['#d9b98a', '#8a5a35'] };
+
+  /* ---- rank tiers + generated avatars */
+  var TIERS = [[2000, 'Master', '🔥', '255,120,80'], [1800, 'Diamond', '💎', '120,220,255'], [1600, 'Platinum', '💠', '150,190,255'], [1400, 'Gold', '🥇', '255,205,80'], [1200, 'Silver', '🥈', '205,212,230'], [1000, 'Bronze', '🥉', '225,150,90'], [0, 'Rookie', '🌱', '120,230,150']];
+  function tierOf(r) { for (var i = 0; i < TIERS.length; i++) if (r >= TIERS[i][0]) return { name: TIERS[i][1], icon: TIERS[i][2], rgb: TIERS[i][3] }; return { name: 'Rookie', icon: '🌱', rgb: '120,230,150' }; }
+  function avGrad(name) {
+    var hsh = 0, s = String(name || '?');
+    for (var i = 0; i < s.length; i++) hsh = (hsh * 31 + s.charCodeAt(i)) % 360;
+    return 'linear-gradient(135deg, hsl(' + hsh + ' 85% 62%), hsl(' + ((hsh + 55) % 360) + ' 85% 52%))';
+  }
+  function crown() { var c = document.createElement('span'); c.className = 'crown'; c.title = 'Admin'; c.textContent = '👑'; return c; }
 
   /* ================================================================ sound (synthesised, no assets) */
   var actx = null;
@@ -74,6 +84,24 @@
     if (/[+#]$/.test(rec.san)) sfx('check');
     else if (rec.flags.indexOf('c') >= 0) sfx('capture');
     else sfx('move');
+    fxMove(rec);
+  }
+  /* visual flourishes: capture bursts, checkmate shake */
+  function squareCenter(sq) {
+    var el = typeof view !== 'undefined' && view.sqEls[sq];
+    if (!el) return null;
+    var r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+  function fxMove(rec) {
+    if (!window.FX || !rec) return;
+    var c = squareCenter(rec.to);
+    if (c && rec.flags.indexOf('c') >= 0) window.FX.burst(c.x, c.y, rec.color === 'w' ? '#ffffff' : '#9aa0d8', 16);
+    if (/#$/.test(rec.san)) {
+      var b = document.getElementById('board');
+      b.classList.add('shake'); setTimeout(function () { b.classList.remove('shake'); }, 650);
+      if (c) window.FX.burst(c.x, c.y, '#ff5c7a', 34);
+    }
   }
 
   /* ================================================================ network */
@@ -87,7 +115,7 @@
       ws.onopen = function () {
         self.open = true; self.backoff = 500;
         setNet('ok');
-        ws.send(JSON.stringify({ t: 'hello', pid: S.pid, sid: S.sid, name: S.name }));
+        ws.send(JSON.stringify({ t: 'hello', pid: S.pid, sid: S.sid, name: S.name, akey: lsGet('gambit.akey', undefined) }));
         if (G && G.mode === 'online' && G.room) ws.send(JSON.stringify({ t: 'join', room: G.room }));
         else if (S.queued) ws.send(JSON.stringify({ t: 'queue', tc: S.queued.tc, rated: S.queued.rated }));   // re-enter the queue after a reconnect
         else ws.send(JSON.stringify({ t: 'lobby' }));
@@ -228,7 +256,7 @@
     var p = this.pos(this.badge.sq), info = this.badge.info;
     el.style.display = 'block';
     el.style.left = (p.col * 12.5) + '%'; el.style.top = (p.row * 12.5) + '%';
-    var b = h('span', 'bdg' + (info.sym.length > 1 ? '' : ' big'), info.sym);
+    var b = h('span', 'bdg' + (info.sym.length > 1 ? '' : ' big') + (info.label === 'Brilliant' ? ' shine' : ''), info.sym);
     b.style.background = info.color; b.style.color = info.ink;
     el.appendChild(b);
   };
@@ -744,6 +772,11 @@
     if (rv && rv.item && rv.item.best && rv.loss >= 3) { hintMv = rv.item.best; hintCol = 'rgba(120,190,60,.88)'; }   // "best was…"
     view.setHint(hintMv, hintCol);
     view.setBadge(rv && rv.cls ? G.moves[ply - 1].to : null, rv && rv.cls ? Review.INFO[rv.cls] : null);
+    if (rv && rv.cls === 'brilliant' && G._sparkPly !== ply && window.FX) {       // little firework for a brilliancy
+      G._sparkPly = ply;
+      var sc = squareCenter(G.moves[ply - 1].to);
+      if (sc) setTimeout(function () { window.FX.burst(sc.x, sc.y, '#1baca6', 30); }, 120);
+    }
   }
 
   function playerLabel(c) {
@@ -756,7 +789,11 @@
     var bc = bottomColor(), tc = other(bc), cb = capturedBy(G.infos[curPly()].fen);
     [['top', tc], ['bottom', bc]].forEach(function (pair) {
       var pos = pair[0], c = pair[1], p = G.players[c];
-      $('#name-' + pos).textContent = playerLabel(c);
+      var label = playerLabel(c), nameEl = $('#name-' + pos), av = $('#av-' + pos);
+      nameEl.textContent = label;
+      if (p && p.admin) nameEl.appendChild(crown());
+      av.textContent = p ? (label || '?').trim().charAt(0).toUpperCase() || '?' : '?';
+      if (p) av.style.setProperty('--av', avGrad(label)); else av.style.removeProperty('--av');
       $('#rating-' + pos).textContent = p && p.rating ? '(' + p.rating + ')' : '';
       var dot = $('#dot-' + pos);
       dot.classList.toggle('on', G.mode === 'online' ? !!(p && p.connected) : true);
@@ -855,6 +892,7 @@
       'timeout vs insufficient material': 'timeout (insufficient mating material)', aborted: 'abort'
     }[reason] || reason;
     if (reason === 'aborted') return { title: 'Game aborted', sub: '' };
+    if (result === '*') return { title: 'Game ended', sub: 'by an admin', winner: null };
     if (result === '1-0') return { title: 'White wins', sub: 'by ' + why, winner: 'w' };
     if (result === '0-1') return { title: 'Black wins', sub: 'by ' + why, winner: 'b' };
     return { title: 'Draw', sub: 'by ' + why, winner: null };
@@ -962,6 +1000,11 @@
         var oppP = G.players[opp];
         if (oppP && !oppP.connected && G.discSeen && Date.now() - G.discSeen > 60000)
           add('Claim win (opponent left)', 'primary', function () { Net.send({ t: 'claim' }); });
+        if (S.admin) {                       // admin powers: never silent, the table is told and the game goes unrated
+          add('👑 Hint', 'admin-btn', adminHint, false, 'Engine hint (announced to the table)');
+          add('👑 Undo', 'admin-btn', function () { Net.send({ t: 'admin', a: 'undo' }); }, G.moves.length === 0, 'Take back your last move (announced)');
+          add('👑 +1:00', 'admin-btn', function () { Net.send({ t: 'admin', a: 'addtime' }); }, !(G.tc && G.tc.base), 'Add a minute to your clock (announced)');
+        }
       } else if (over && isPlayer) {
         add('↻ Rematch', 'primary', function () { Net.send({ t: 'rematch' }); }, !!G.rematch[me]);
         add('New game', '', function () { go('/'); });
@@ -1093,13 +1136,15 @@
     if (G.overShown) return;
     G.overShown = true;
     sfx('end');
+    if (window.FX && G.seat && G.seat !== 's' && G.seat !== 'both' && resultInfo(G.result, G.reason).winner === G.seat) setTimeout(window.FX.confetti, 250);
     var ri = resultInfo(G.result, G.reason), me = G.seat, mine = me === 'w' || me === 'b';
     var title = ri.title, icon = '♚';
     if (mine && ri.winner) { title = ri.winner === me ? 'You won!' : 'You lost'; icon = ri.winner === me ? '♛' : '♚'; }
+    else if (G.result === '*') icon = '⚑';
     else if (!ri.winner) icon = '½';
     $('#over-icon').textContent = icon;
     $('#over-title').textContent = title;
-    $('#over-sub').textContent = ri.winner ? ri.title + ' ' + ri.sub : (ri.sub ? 'Draw ' + ri.sub : '');
+    $('#over-sub').textContent = ri.winner ? ri.title + ' ' + ri.sub : (ri.sub ? (G.result === '*' ? ri.sub : 'Draw ' + ri.sub) : '');
     var d = $('#over-delta');
     d.textContent = '';
     if (G.mode === 'online' && G.delta && mine) {
@@ -1278,7 +1323,17 @@
       case 'welcome':
         S.name = m.name || S.name; S.rating = m.rating;
         lsSet('gambit.name', S.name);
-        updateProfile();
+        if (S._wantName) { if (m.name === S._wantName) toast('Name saved'); S._wantName = null; }
+        S.admin = !!m.admin;
+        if (m.admin && S._pendingKey) { lsSet('gambit.akey', S._pendingKey); S._pendingKey = null; }
+        if (!m.admin && lsGet('gambit.akey', null) && !S._pendingKey) lsSet('gambit.akey', null);   // stored key no longer valid
+        updateProfile(); updateAdminUI();
+        if (G) { renderBars(); renderActions(); }
+        break;
+      case 'adminfail': S._pendingKey = null; $('#admin-msg').textContent = m.msg; break;
+      case 'announce': showAnnouncement(m.a); break;
+      case 'admin':
+        if (m.a === 'rooms' || m.a === 'players') { S.adminData[m.a] = m; renderAdmin(); }
         break;
       case 'lobby': renderLobby(m); break;
       case 'queue':
@@ -1335,6 +1390,7 @@
   }
   function renderLobby(m) {
     $('#online-count').textContent = m.online + ' online';
+    $('#hero-online').textContent = m.online + (m.online === 1 ? ' player online' : ' players online');
     if (!S.queued) $('#queue-count').textContent = m.queued ? m.queued + ' searching' : '';
     fillList('#open-list', m.open.map(function (g) {
       var e = item('button', function () { go('/g/' + g.id); });
@@ -1353,8 +1409,11 @@
     }), 'Nothing in progress.');
     fillList('#top-list', m.top.map(function (p, i) {
       var e = item('div');
-      e.appendChild(h('span', 'rk', String(i + 1)));
-      e.appendChild(h('span', 'grow', p.name));
+      e.appendChild(h('span', 'rk', ['🥇', '🥈', '🥉'][i] || String(i + 1)));
+      var nm = h('span', 'grow', p.name); if (p.admin) nm.appendChild(crown());
+      e.appendChild(nm);
+      var tr = tierOf(p.rating), tchip = h('span', 'tier-chip', tr.icon + ' ' + tr.name); tchip.style.setProperty('--tc', tr.rgb);
+      e.appendChild(tchip);
       e.appendChild(h('span', 'tag', p.wins + 'W ' + p.losses + 'L ' + p.draws + 'D'));
       e.appendChild(h('span', 'res', String(p.rating)));
       return e;
@@ -1371,6 +1430,9 @@
   function updateProfile() {
     $('#my-rating').textContent = S.rating;
     $('#avatar').textContent = (S.name || '?').trim().charAt(0).toUpperCase() || '?';
+    $('#avatar').style.setProperty('--av', avGrad(S.name));
+    var tr = tierOf(S.rating), tc = $('#my-tier');
+    tc.textContent = tr.icon + ' ' + tr.name; tc.style.setProperty('--tc', tr.rgb);
     var inp = $('#name-input');
     if (document.activeElement !== inp) inp.value = S.name;
   }
@@ -1392,9 +1454,9 @@
     var n = $('#name-input').value.replace(/[<>]/g, '').trim().slice(0, 20);
     if (!n) { $('#name-input').value = S.name; return; }
     S.name = n; lsSet('gambit.name', n);
+    S._wantName = n;                       // confirmed (or corrected) by the server's reply
     Net.send({ t: 'rename', name: n });
     updateProfile();
-    toast('Name saved');
   }
   $('#btn-save-name').onclick = saveName;
   $('#name-input').addEventListener('keydown', function (e) { if (e.key === 'Enter') { saveName(); this.blur(); } });
@@ -1455,6 +1517,10 @@
   /* ================================================================ settings UI */
   function applySettings() {
     document.body.dataset.theme = settings.theme;
+    document.body.dataset.ui = settings.ui;
+    if (window.FX) { window.FX.setUi(settings.ui); window.FX.enable(settings.fx); }
+    $('#set-fx').checked = settings.fx;
+    Array.prototype.forEach.call($('#seg-ui').children, function (b) { b.classList.toggle('on', b.dataset.v === settings.ui); });
     $('#board').classList.toggle('classic', settings.pieces === 'classic');
     $('#board').classList.toggle('no-coords', !settings.coords);
     $('#promo-row').classList.toggle('classic', settings.pieces === 'classic');
@@ -1477,6 +1543,14 @@
     var b = e.target.closest('button'); if (!b) return;
     settings.reviewMs = +b.dataset.v; saveSettings(); applySettings();
   });
+  $('#seg-ui').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    settings.ui = b.dataset.v; saveSettings(); applySettings();
+    // a matching board colour makes the new look feel finished (only if the player is still on a default)
+    var pair = { neon: 'violet', sakura: 'sakurab', gold: 'green' }[settings.ui];
+    if (pair && ['violet', 'sakurab', 'green', 'ice'].indexOf(settings.theme) >= 0) { settings.theme = pair; saveSettings(); applySettings(); }
+  });
+  $('#set-fx').addEventListener('change', function () { settings.fx = this.checked; saveSettings(); applySettings(); });
   $('#seg-pieces').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
     settings.pieces = b.dataset.v; saveSettings(); applySettings();
@@ -1716,6 +1790,132 @@
     joinQueue({ base: p[0] * 60, inc: p[1] }, $('#quick-rated').checked);
   });
   $('#btn-cancel-queue').onclick = leaveQueue;
+
+  /* ================================================================ announcements */
+  var dismissedAnn = 0;
+  function showAnnouncement(a) {
+    var bar = $('#announce');
+    if (!a || !a.text) { bar.classList.add('hidden'); return; }
+    if (a.ts === dismissedAnn) return;
+    $('#announce-text').textContent = (a.from ? a.from + ': ' : '') + a.text;
+    bar.dataset.ts = a.ts;
+    bar.classList.remove('hidden');
+    if (S._annSeen !== a.ts) { S._annSeen = a.ts; sfx('notify'); }
+  }
+  $('#announce-close').onclick = function () { dismissedAnn = +$('#announce').dataset.ts || 0; $('#announce').classList.add('hidden'); };
+
+  /* ================================================================ admin (key-gated; the server re-checks every action) */
+  var adminTab = 'powers', adminConfirm = 0;
+  function inMyOnlineGame() { return !!(G && G.mode === 'online' && G.status === 'playing' && (G.seat === 'w' || G.seat === 'b')); }
+
+  function adminHint() {
+    if (!inMyOnlineGame()) { toast('Hints work in your own live games', true); return; }
+    Net.send({ t: 'admin', a: 'hint' });                 // the server announces it to the table
+    var g = G, fen = G.chess.fen();
+    toast('Thinking…');
+    Engine.run({ type: 'analyze', fen: fen, depth: 10, ms: 1600 }).then(function (res) {
+      if (G !== g || !res.move) return;
+      g.hint = res.move; view.setHint(res.move);
+    });
+  }
+
+  function updateAdminUI() {
+    $('#btn-admin').classList.toggle('hidden', !S.admin);
+    $('#admin-locked').classList.toggle('hidden', S.admin);
+    $('#admin-unlocked').classList.toggle('hidden', !S.admin);
+    if (!S.admin) $('#admin-modal').classList.add('hidden');
+  }
+  $('#btn-admin-unlock').onclick = function () {
+    var k = $('#admin-key').value;
+    if (!k) return;
+    $('#admin-msg').textContent = '';
+    S._pendingKey = k;
+    Net.send({ t: 'admin_login', key: k });
+    $('#admin-key').value = '';
+  };
+  $('#admin-key').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#btn-admin-unlock').click(); });
+  $('#btn-admin-forget').onclick = function () {
+    lsSet('gambit.akey', null); S._pendingKey = null;
+    Net.send({ t: 'admin_logout' });
+    toast('Admin locked on this device');
+  };
+
+  $('#btn-admin').onclick = function () { $('#admin-modal').classList.remove('hidden'); adminFetch(); renderAdmin(); };
+  $('#admin-close').onclick = function () { $('#admin-modal').classList.add('hidden'); };
+  $('#admin-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.add('hidden'); });
+  $('#admin-tabs').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    adminTab = b.dataset.v;
+    Array.prototype.forEach.call($('#admin-tabs').children, function (x) { x.classList.toggle('on', x === b); });
+    adminFetch(); renderAdmin();
+  });
+  function adminFetch() {
+    if (adminTab === 'games') Net.send({ t: 'admin', a: 'rooms' });
+    if (adminTab === 'players') Net.send({ t: 'admin', a: 'players' });
+  }
+
+  function renderAdmin() {
+    var box = $('#admin-body');
+    if ($('#admin-modal').classList.contains('hidden')) return;
+    box.textContent = '';
+    if (!S.admin) { box.appendChild(h('div', 'muted', 'Admin is locked.')); return; }
+
+    if (adminTab === 'powers') {
+      var live = inMyOnlineGame();
+      box.appendChild(h('div', 'admin-note', 'Powers are never secret: using one marks the game unrated and tells everyone at the table. Start or join a live game to use them.'));
+      var pw = h('div', 'apower');
+      function power(title, sub, fn, disabled) {
+        var b = h('button', 'btn'); b.disabled = disabled;
+        b.appendChild(document.createTextNode(title)); b.appendChild(h('small', null, sub));
+        b.onclick = function () { $('#admin-modal').classList.add('hidden'); fn(); };
+        pw.appendChild(b);
+      }
+      power('💡 Engine hint', 'Best move arrow for your turn', adminHint, !live);
+      power('↶ Undo my move', 'Takes back your last move, no permission needed', function () { Net.send({ t: 'admin', a: 'undo' }); }, !live || !G.moves.length);
+      power('⏱ +1:00 clock', 'Adds a minute to your clock', function () { Net.send({ t: 'admin', a: 'addtime' }); }, !live || !(G.tc && G.tc.base));
+      box.appendChild(pw);
+      box.appendChild(h('h3', null, 'Danger zone'));
+      var rb = h('button', 'btn danger', Date.now() - adminConfirm < 3500 ? 'Really wipe everything?' : '🗑 Reset leaderboard & history');
+      rb.onclick = function () {
+        if (Date.now() - adminConfirm < 3500) { adminConfirm = 0; Net.send({ t: 'admin', a: 'resetboard' }); renderAdmin(); }
+        else { adminConfirm = Date.now(); renderAdmin(); setTimeout(renderAdmin, 3600); }
+      };
+      box.appendChild(rb);
+    } else if (adminTab === 'games') {
+      var rooms = (S.adminData.rooms && S.adminData.rooms.rooms) || [];
+      box.appendChild(h('h3', null, 'All games on the server (' + rooms.length + ')'));
+      if (!rooms.length) box.appendChild(h('div', 'muted', 'No games right now.'));
+      rooms.forEach(function (r) {
+        var row = h('div', 'arow');
+        row.appendChild(h('span', 'grow', (r.white || '—') + ' vs ' + (r.black || '—') + '  ·  ' + r.status + ' · ' + r.moves + ' ply' + (r.watching ? ' · ' + r.watching + ' watching' : '')));
+        var w = h('button', 'btn small', 'Watch'); w.onclick = function () { $('#admin-modal').classList.add('hidden'); go('/g/' + r.id); };
+        var x = h('button', 'btn small danger', 'End'); x.disabled = r.status === 'over';
+        x.onclick = function () { Net.send({ t: 'admin', a: 'endroom', id: r.id }); };
+        row.appendChild(w); row.appendChild(x); box.appendChild(row);
+      });
+      var rf = h('button', 'btn small', '↻ Refresh'); rf.onclick = adminFetch; box.appendChild(rf);
+    } else if (adminTab === 'players') {
+      var pl = (S.adminData.players && S.adminData.players.players) || [];
+      box.appendChild(h('h3', null, 'Players (' + pl.length + ')'));
+      pl.forEach(function (p) {
+        var row = h('div', 'arow'), nm = h('span', 'grow', p.name + '  ·  ' + p.games + ' games'); if (p.admin) nm.appendChild(crown());
+        var inp = h('input'); inp.type = 'number'; inp.value = p.rating; inp.min = 100; inp.max = 3500;
+        var set = h('button', 'btn small', 'Set rating');
+        set.onclick = function () { Net.send({ t: 'admin', a: 'setrating', pid: p.pid, rating: +inp.value }); };
+        row.appendChild(nm); row.appendChild(inp); row.appendChild(set); box.appendChild(row);
+      });
+      if (!pl.length) box.appendChild(h('div', 'muted', 'No players yet.'));
+    } else if (adminTab === 'announce') {
+      box.appendChild(h('h3', null, 'Message to everyone online'));
+      var ai = h('input'); ai.maxLength = 200; ai.placeholder = 'e.g. Tournament at 8pm — bring your best openings!';
+      var row2 = h('div', 'row gap');
+      var send = h('button', 'btn primary', 'Send'); send.onclick = function () { if (ai.value.trim()) { Net.send({ t: 'admin', a: 'announce', text: ai.value }); toast('Announcement sent'); ai.value = ''; } };
+      var clr = h('button', 'btn', 'Clear current'); clr.onclick = function () { Net.send({ t: 'admin', a: 'announce', text: '' }); toast('Announcement cleared'); };
+      row2.appendChild(ai); row2.appendChild(send); row2.appendChild(clr);
+      box.appendChild(row2);
+    }
+  }
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') $('#admin-modal').classList.add('hidden'); });
 
   /* ================================================================ boot */
   applySettings();

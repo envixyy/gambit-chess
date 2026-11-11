@@ -2,6 +2,8 @@
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+process.env.ADMIN_KEY = 'test-admin-key-0123456789';
+const ADMIN_KEY = process.env.ADMIN_KEY;
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gambit-test-'));
 const WebSocket = require('ws');
 const { server } = require('../server.js');
@@ -143,6 +145,58 @@ function client(name, port) {
   await Q1.waitFor((c) => c.last.error);
   check('cannot queue during a live game', /current game/.test(Q1.last.error.msg));
   [Q1, Q2, Q3, Q4].forEach((c) => c.ws.close());
+
+  // --- admin: reserved name, secret key, transparent cheats
+  const KAWAII = client('Kawaii', port), RANDO = client('Rando', port), PAL = client('Pal', port);
+  await Promise.all([KAWAII.open, RANDO.open, PAL.open]);
+  RANDO.send({ t: 'hello', pid: RANDO.pid, sid: RANDO.sid, name: 'KawaiiGirl_34' });
+  await RANDO.waitFor((c) => c.msgs.filter((x) => x.t === 'welcome').length >= 2);
+  check('reserved admin name cannot be taken without the key', RANDO.msgs.filter((x) => x.t === 'welcome').pop().name !== 'KawaiiGirl_34' && !!RANDO.last.error);
+  RANDO.send({ t: 'admin_login', key: 'wrong-key-wrong-key-' });
+  await RANDO.waitFor((c) => c.last.adminfail);
+  check('wrong admin key is refused', !!RANDO.last.adminfail);
+  RANDO.send({ t: 'admin', a: 'resetboard' });
+  await RANDO.waitFor((c) => c.msgs.some((x) => x.t === 'error' && x.msg === 'Admins only'));
+  check('admin powers are blocked for non-admins', RANDO.msgs.some((x) => x.t === 'error' && x.msg === 'Admins only'));
+
+  KAWAII.send({ t: 'hello', pid: KAWAII.pid, sid: KAWAII.sid, name: 'kawaiigirl34', akey: ADMIN_KEY });
+  await KAWAII.waitFor((c) => c.msgs.filter((x) => x.t === 'welcome').length >= 2);
+  const kw = KAWAII.msgs.filter((x) => x.t === 'welcome').pop();
+  check('kawaiigirl34 with the key gets the name and admin', kw.name === 'kawaiigirl34' && kw.admin === true);
+
+  KAWAII.send({ t: 'create', tc: { base: 300, inc: 0 }, rated: true, public: false, color: 'w' });
+  await KAWAII.waitFor((c) => c.last.created && c.state && c.state.id === c.last.created.room);
+  const aroom = KAWAII.last.created.room;
+  PAL.send({ t: 'join', room: aroom });
+  await PAL.waitFor((c) => c.state && c.state.status === 'playing');
+  check('admin badge is public in the game state', PAL.state.players.w.admin === true && PAL.state.players.b.admin === false);
+  KAWAII.send({ t: 'move', mv: { from: 'e2', to: 'e4' } });
+  await PAL.waitFor((c) => c.state.moves.length === 1);
+  PAL.send({ t: 'move', mv: { from: 'e7', to: 'e5' } });
+  await KAWAII.waitFor((c) => c.state.moves.length === 2);
+  KAWAII.send({ t: 'admin', a: 'undo' });
+  await KAWAII.waitFor((c) => c.state.moves.length === 0);
+  check('admin undo rewinds her last move and the reply', KAWAII.state.moves.length === 0 && KAWAII.state.turn === 'w');
+  check('cheats make the game unrated', KAWAII.state.rated === false);
+  await PAL.waitFor((c) => c.last.chat && c.last.chat.msg.seat === 'a');
+  check('the opponent is told about the cheat', /admin power: undo/.test(PAL.last.chat.msg.text));
+  KAWAII.send({ t: 'admin', a: 'addtime' });
+  await KAWAII.waitFor((c) => c.state.clocks.w > 300000);
+  check('admin can add time', KAWAII.state.clocks.w >= 359000);
+
+  KAWAII.send({ t: 'admin', a: 'announce', text: 'Tournament tonight!' });
+  await PAL.waitFor((c) => c.last.announce && c.last.announce.a);
+  check('announcements reach every player', PAL.last.announce.a.text === 'Tournament tonight!');
+  KAWAII.send({ t: 'admin', a: 'players' });
+  await KAWAII.waitFor((c) => c.last.admin && c.last.admin.a === 'players');
+  const target = KAWAII.last.admin.players.find((p) => p.name === 'Pal');
+  KAWAII.send({ t: 'admin', a: 'setrating', pid: target.pid, rating: 2222 });
+  await KAWAII.waitFor((c) => c.last.admin && c.last.admin.players && c.last.admin.players.find((p) => p.name === 'Pal').rating === 2222);
+  check('admin can set a rating', true);
+  KAWAII.send({ t: 'admin', a: 'endroom', id: aroom });
+  await PAL.waitFor((c) => c.state.status === 'over');
+  check('admin can end any game', PAL.state.reason === 'ended by admin');
+  [KAWAII, RANDO, PAL].forEach((c) => c.ws.close());
 
   // --- static files
   const body = await new Promise((resolve) => require('http').get('http://localhost:' + port + '/chess.js', (res) => {
